@@ -1,0 +1,85 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - mongo
+      - redis
+      - chroma
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - INTERNAL_API_URL=http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app_db
+    volumes:
+      - ../volume/postgres:/var/lib/postgresql/data
+      - ./database/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - ../volume/mongo:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - ../volume/redis:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
+  chroma:
+    image: ghcr.io/chromadb/chromadb:latest
+    restart: unless-stopped
+    environment:
+      - CHROMA_DB_IMPL=duckdb+parquet
+      - CHROMA_SERVER_ALLOW_RESET=false
+    volumes:
+      - ../volume/chroma:/chroma
+    ports:
+      - "8002:8000"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
